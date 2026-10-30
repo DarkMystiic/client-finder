@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Client Finder</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2317140f'/%3E%3Ccircle cx='14' cy='14' r='6' fill='none' stroke='%23e4572e' stroke-width='3'/%3E%3Cpath d='M19 19l6 6' stroke='%23e4572e' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --bg: #f6f2ea; --card: #fffdf8; --ink: #17140f; --muted: #6b645a; --line: #e2dbcf; --accent: #e4572e; --good: #1f9d55; --warn: #c27c0e; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 "Inter", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 0 16px; }
+  header { padding: 22px 0 8px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  h1 { font-size: 24px; margin: 0; font-weight: 800; letter-spacing: -.02em; }
+  h1 span { color: var(--accent); }
+  .sub { color: var(--muted); margin: 2px 0 0; font-size: 14px; }
+  button, .btn { font: 600 14px "Inter", sans-serif; border-radius: 10px; padding: 10px 14px; border: 1.5px solid var(--ink); background: var(--card); color: var(--ink); cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+  .primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .link { border: 0; background: none; padding: 6px 4px; color: var(--muted); text-decoration: underline; }
+
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; margin: 14px 0; }
+  label { font-size: 13px; font-weight: 600; display: grid; gap: 5px; }
+  input, select, textarea { font: 15px "Inter", sans-serif; padding: 11px 12px; border: 1.5px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); width: 100%; }
+  textarea { min-height: 92px; resize: vertical; }
+  .search { display: grid; grid-template-columns: 1fr 130px; gap: 12px; }
+  .cats { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+  .cats label { display: inline-flex; align-items: center; gap: 7px; border: 1.5px solid var(--line); border-radius: 999px; padding: 7px 12px; font-weight: 500; cursor: pointer; background: #fff; }
+  .cats input { width: auto; margin: 0; accent-color: var(--accent); }
+  .cats label:has(input:checked) { border-color: var(--ink); }
+  #go { width: 100%; padding: 14px; font-size: 16px; }
+  #status { color: var(--muted); font-size: 14px; margin: 10px 0 0; min-height: 20px; }
+
+  .tabs { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0 10px; scrollbar-width: none; }
+  .tabs button { border-radius: 999px; padding: 8px 13px; white-space: nowrap; border-color: var(--line); font-weight: 600; }
+  .tabs button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .tabs b { opacity: .6; font-weight: 600; margin-left: 2px; }
+
+  .lead { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; margin-bottom: 12px; }
+  .lead .top { display: flex; justify-content: space-between; gap: 10px; align-items: start; }
+  .lead h3 { margin: 0; font-size: 17px; }
+  .lead .meta { color: var(--muted); font-size: 13px; margin: 3px 0 0; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; }
+  .tag { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: #efe9de; color: var(--muted); }
+  .tag.hot { background: #fde4d9; color: var(--accent); }
+  .acts { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 8px; margin-top: 14px; }
+  .acts .btn, .acts button { padding: 11px 10px; }
+  .lead select { width: auto; padding: 6px 8px; font-size: 13px; font-weight: 600; }
+  .empty { text-align: center; color: var(--muted); padding: 36px 12px; }
+  details summary { cursor: pointer; font-weight: 600; }
+  .tpl { display: grid; gap: 12px; margin-top: 14px; }
+  .hint { font-size: 12px; color: var(--muted); font-weight: 400; }
+  .toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 10px; font-weight: 600; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 9; }
+  .toast.on { opacity: 1; }
+  footer { color: var(--muted); font-size: 12px; padding: 20px 0 40px; }
+  @media (max-width: 520px) {
+    .search { grid-template-columns: 1fr; }
+    .acts { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div><h1>Client <span>Finder</span></h1><p class="sub">Local businesses with no website → a free preview → one tap to send.</p></div>
+    <button class="link" id="export">Export CSV</button>
+  </header>
+
+  <div class="panel">
+    <div class="search">
+      <label>City or neighbourhood<input id="city" placeholder="e.g. Sacramento, CA" autocomplete="address-level2"></label>
+      <label>Within<select id="radius"><option value="5000">5 km</option><option value="10000" selected>10 km</option><option value="25000">25 km</option></select></label>
+    </div>
+    <div class="cats" id="cats"></div>
+    <button class="primary" id="go">Find businesses without a website</button>
+    <p id="status"></p>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+  <div id="list"></div>
+
+  <details class="panel">
+    <summary>Message templates</summary>
+    <p class="hint">Placeholders: {name} {link} {me} {price} {city} {portfolio}</p>
+    <div class="tpl">
+      <label>Text message<textarea id="t-sms"></textarea></label>
+      <label>Email subject<input id="t-subj"></label>
+      <label>Email body<textarea id="t-email"></textarea></label>
+      <label>Follow-up (after 3 days)<textarea id="t-follow"></textarea></label>
+      <button id="t-reset" class="link" style="justify-self:start">Reset to defaults</button>
+    </div>
+  </details>
+  <footer>Business data © OpenStreetMap contributors (ODbL). Leads and statuses are saved only in this browser.</footer>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="config.js"></script>
+<script src="cats.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("cf." + k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("cf." + k, JSON.stringify(v)); } catch {} },
+};
+
+const DEFAULTS = {
+  sms: "Hi! I'm {me}, a local web designer. I noticed {name} doesn't have a website yet, so I made you a free preview of what one could look like: {link}\n\nIf you like it, I can make it live for {price} (one-time). No pressure either way!",
+  subj: "I made {name} a free website preview",
+  email: "Hi there,\n\nI'm {me}, a web designer. I noticed {name} doesn't have a website yet, so I put together a free preview of what yours could look like:\n\n{link}\n\nIf you like it, I can finish it with your photos, details and booking/contact buttons and get it live for {price} (one-time, no monthly fees from me). Here's more of my work: {portfolio}\n\nHappy to answer any questions.\n\n{me}",
+  follow: "Hi again! Just checking whether you got a chance to look at the free preview I made for {name}: {link}\nHappy to change anything you'd like. {me}",
+};
+const STATUSES = { new: "To contact", contacted: "Contacted", replied: "Replied", won: "Won", skip: "Not interested" };
+const FOLLOW_DAYS = 3;
+
+let leads = store.get("leads", {});
+let tpl = Object.assign({}, DEFAULTS, store.get("tpl", {}));
+let tab = "new";
+
+// ---------- search ----------
+$("cats").innerHTML = Object.entries(CATS).map(([k, c]) => `<label><input type="checkbox" value="${k}" ${["fight", "hair", "home", "auto"].includes(k) ? "checked" : ""}>${c.label}</label>`).join("");
+$("city").value = store.get("city", "");
+$("radius").value = store.get("radius", "10000");
+
+// Overpass gives the most results but its free servers are often overloaded, so each try is
+// capped; if all fail, Nominatim (OSM's own search, max 50 per word) fills in.
+const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter"];
+const NO_SITE = (t) => !t.website && !t["contact:website"] && !t.url;
+const GENERIC = /^(hair salon|salon|barber|barbers|barber shop|barbershop|gym|fitness|restaurant|cafe|café|bakery|car wash|auto repair|tattoo|nails|nail salon|beauty salon)$/i;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function fetchTimeout(url, opts, ms) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), ms);
+  try { return await fetch(url, { ...opts, signal: ctl.signal }); } finally { clearTimeout(timer); }
+}
+
+async function viaOverpass(picked, lat, lon, radius) {
+  const around = `(around:${radius},${lat},${lon})`;
+  const parts = picked.flatMap((k) => CATS[k].q).map((q) => q + "[name][!website][!\"contact:website\"][!url]" + around + ";").join("\n");
+  const query = `[out:json][timeout:25];(\n${parts}\n);out center tags 600;`;
+  for (const url of OVERPASS) {
+    try {
+      const r = await fetchTimeout(url, { method: "POST", body: "data=" + encodeURIComponent(query) }, 15000);
+      if (r.ok) return (await r.json()).elements.map((el) => ({ id: el.type[0] + el.id, tags: el.tags || {} }));
+    } catch {}
+  }
+  return null;
+}
+
+async function viaNominatim(picked, lat, lon, radius) {
+  const dLat = radius / 111000, dLon = radius / (111000 * Math.cos((lat * Math.PI) / 180));
+  const box = [lon - dLon, +lat + dLat, +lon + dLon, lat - dLat].join(",");
+  const out = [];
+  const words = picked.flatMap((k) => CATS[k].nq.map((w) => [k, w]));
+  for (const [i, [k, w]] of words.entries()) {
+    say(`Searching ${w}… (${i + 1}/${words.length})`);
+    const u = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=50&extratags=1&addressdetails=1&bounded=1&viewbox=${box}&q=${encodeURIComponent(w)}`;
+    try {
+      const res = await (await fetchTimeout(u, {}, 12000)).json();
+      for (const x of res) {
+        const tags = Object.assign({ name: x.name, [x.category]: x.type }, x.extratags || {});
+        const a = x.address || {};
+        tags["addr:housenumber"] ??= a.house_number; tags["addr:street"] ??= a.road; tags["addr:city"] ??= a.city || a.town || a.village;
+        out.push({ id: x.osm_type[0] + x.osm_id, tags, hint: k });
+      }
+    } catch {}
+    await sleep(1100); // Nominatim's usage policy: at most 1 request per second
+  }
+  return out;
+}
+
+function catOf(tags, picked) {
+  // Most specific first, so a boxing gym counts as "fight", not "fitness".
+  const order = ["fight", "hair", "beauty", "auto", "home", "food", "fitness"].filter((k) => picked.includes(k));
+  const s = tags.sport || "", l = tags.leisure || "", a = tags.amenity || "", sh = tags.shop || "", cr = tags.craft || "";
+  for (const k of order) {
+    if (k === "fight" && (a === "dojo" || /boxing|martial|mma|muay|kickbox|karate|judo|taekwondo|jiu|wrestl|krav/.test(s))) return k;
+    if (k === "hair" && /^(hairdresser|barber)$/.test(sh)) return k;
+    if (k === "beauty" && /^(beauty|tattoo|cosmetics|massage)$/.test(sh)) return k;
+    if (k === "auto" && (/^(car_repair|tyres|car_parts)$/.test(sh) || a === "car_wash")) return k;
+    if (k === "home" && (cr || sh === "trade")) return k;
+    if (k === "food" && (/^(restaurant|cafe|fast_food|ice_cream)$/.test(a) || /^(bakery|pastry|deli)$/.test(sh))) return k;
+    if (k === "fitness" && l === "fitness_centre") return k;
+  }
+  return null;
+}
+
+$("go").onclick = async () => {
+  const city = $("city").value.trim();
+  const picked = [...document.querySelectorAll("#cats input:checked")].map((i) => i.value);
+  if (!city) return say("Type a city first.");
+  if (!picked.length) return say("Pick at least one kind of business.");
+  store.set("city", city); store.set("radius", $("radius").value);
+  $("go").disabled = true;
+  try {
+    say("Finding " + city + "…");
+    const g = await (await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(city))).json();
+    if (!g.length) throw new Error("Couldn't find that place. Try adding the state or country.");
+    const { lat, lon } = g[0];
+    const cityName = city.split(",")[0].trim();
+    say("Searching businesses near " + cityName + "…");
+    const radius = $("radius").value;
+    const found = (await viaOverpass(picked, lat, lon, radius)) || (await viaNominatim(picked, lat, lon, radius));
+    let added = 0;
+    for (const { id, tags: t, hint } of found) {
+      // Nominatim words are looser than Overpass filters: trust the word's category only for business-like places.
+      const cat = catOf(t, picked) || (hint && /^(shop|craft|amenity|leisure|office)$/.test(Object.keys(t)[1]) ? hint : null);
+      if (!cat || leads[id] || !t.name || GENERIC.test(t.name.trim()) || !NO_SITE(t)) continue;
+      const addr = [[t["addr:housenumber"], t["addr:street"]].filter(Boolean).join(" "), t["addr:city"]].filter(Boolean).join(", ");
+      leads[id] = {
+        id, cat, name: t.name, city: t["addr:city"] || cityName, addr,
+        phone: t.phone || t["contact:phone"] || t["contact:mobile"] || "",
+        email: t.email || t["contact:email"] || "",
+        ig: t["contact:instagram"] || "", fb: t["contact:facebook"] || t.facebook || "",
+        hours: t.opening_hours || "",
+        status: "new", ts: 0, found: Date.now(),
+      };
+      added++;
+    }
+    store.set("leads", leads);
+    say(added ? `Found ${added} new businesses with no website.` : `No new ones (${found.length} checked). Try a bigger radius or more categories.`);
+    tab = "new"; render();
+  } catch (e) {
+    say(e.message || "Something went wrong. Try again in a minute.");
+  } finally { $("go").disabled = false; }
+};
+
+function say(t) { $("status").textContent = t; }
+
+// ---------- previews & messages ----------
+function b64url(obj) {
+  const bytes = new TextEncoder().encode(JSON.stringify(obj));
+  let s = ""; bytes.forEach((b) => (s += String.fromCharCode(b)));
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function previewUrl(l) {
+  const d = { n: l.name, t: l.cat, c: l.city };
+  if (l.phone) d.p = l.phone.split(";")[0].trim();
+  if (l.addr) d.a = l.addr;
+  if (l.hours) d.h = l.hours;
+  return new URL("p.html", location.href).href + "#d=" + b64url(d);
+}
+function fill(text, l) {
+  return text.replace(/\{(\w+)\}/g, (m, k) => ({ name: l.name, link: previewUrl(l), me: ME.name, price: ME.price, city: l.city, portfolio: ME.portfolio })[k] ?? m);
+}
+const isFollow = (l) => l.status === "contacted" && !l.followed && Date.now() - l.ts > FOLLOW_DAYS * 864e5;
+const msgFor = (l) => fill(isFollow(l) ? tpl.follow : tpl.sms, l);
+
+function markContacted(l) {
+  if (l.status === "contacted") l.followed = true;
+  l.status = "contacted"; l.ts = Date.now();
+  store.set("leads", leads);
+  setTimeout(render, 400);
+}
+async function copy(text) {
+  try { await navigator.clipboard.writeText(text); toast("Message copied"); } catch { prompt("Copy this message:", text); }
+}
+function toast(t) { $("toast").textContent = t; $("toast").classList.add("on"); setTimeout(() => $("toast").classList.remove("on"), 1600); }
+
+// ---------- list ----------
+function inTab(l, t) {
+  if (t === "follow") return isFollow(l);
+  return l.status === t;
+}
+function render() {
+  const all = Object.values(leads);
+  const tabs = [["new", "To contact"], ["follow", "Follow up"], ["contacted", "Contacted"], ["replied", "Replied"], ["won", "Won"], ["skip", "Not interested"]];
+  $("tabs").innerHTML = tabs.map(([k, n]) => `<button data-t="${k}" class="${k === tab ? "on" : ""}">${n} <b>${all.filter((l) => inTab(l, k)).length}</b></button>`).join("");
+  $("tabs").querySelectorAll("button").forEach((b) => (b.onclick = () => { tab = b.dataset.t; render(); }));
+
+  // Reachable leads first: phone, then email, then social only.
+  const score = (l) => (l.phone ? 4 : 0) + (l.email ? 2 : 0) + (l.ig || l.fb ? 1 : 0);
+  const rows = all.filter((l) => inTab(l, tab)).sort((a, b) => score(b) - score(a) || a.name.localeCompare(b.name));
+  if (!rows.length) {
+    $("list").innerHTML = `<div class="empty">${all.length ? "Nothing here yet." : "Search a city above to find your first leads."}</div>`;
+    return;
+  }
+  $("list").innerHTML = "";
+  for (const l of rows) $("list").appendChild(card(l));
+}
+
+function card(l) {
+  const el = document.createElement("div");
+  el.className = "lead";
+  const msg = msgFor(l);
+  const phone = l.phone.split(";")[0].trim();
+  const igUrl = l.ig ? (l.ig.startsWith("http") ? l.ig : "https://instagram.com/" + l.ig.replace(/^@/, "")) : "";
+  const fbUrl = l.fb ? (l.fb.startsWith("http") ? l.fb : "https://facebook.com/" + l.fb) : "";
+  const since = l.ts ? ` · contacted ${Math.max(0, Math.round((Date.now() - l.ts) / 864e5))}d ago` : "";
+
+  el.innerHTML = `
+    <div class="top">
+      <div><h3></h3><p class="meta"></p></div>
+      <select aria-label="Status">${Object.entries(STATUSES).map(([k, n]) => `<option value="${k}" ${k === l.status ? "selected" : ""}>${n}</option>`).join("")}</select>
+    </div>
+    <div class="tags"></div>
+    <div class="acts"></div>`;
+  el.querySelector("h3").textContent = l.name;
+  el.querySelector(".meta").textContent = `${CATS[l.cat].label}${l.addr ? " · " + l.addr : " · " + l.city}${since}`;
+  const tags = el.querySelector(".tags");
+  const tag = (t, hot) => { const s = document.createElement("span"); s.className = "tag" + (hot ? " hot" : ""); s.textContent = t; tags.appendChild(s); };
+  tag("No website", true);
+  if (phone) tag("📞 " + phone);
+  if (l.email) tag("✉ " + l.email);
+  if (l.ig) tag("Instagram");
+  if (l.fb) tag("Facebook");
+
+  const acts = el.querySelector(".acts");
+  const add = (label, opts) => {
+    const a = document.createElement(opts.href ? "a" : "button");
+    a.className = "btn" + (opts.primary ? " primary" : "");
+    a.textContent = label;
+    if (opts.href) { a.href = opts.href; if (opts.blank) { a.target = "_blank"; a.rel = "noopener"; } }
+    a.onclick = opts.onclick || null;
+    acts.appendChild(a);
+  };
+  const follow = isFollow(l);
+  add("Preview ↗", { href: previewUrl(l), blank: true });
+  if (phone) add(follow ? "Text follow-up" : "Text", { primary: true, href: `sms:${phone.replace(/[^\d+]/g, "")}?&body=${encodeURIComponent(msg)}`, onclick: () => markContacted(l) });
+  if (l.email) add(follow ? "Email follow-up" : "Email", { primary: !phone, href: `mailto:${l.email}?subject=${encodeURIComponent(fill(tpl.subj, l))}&body=${encodeURIComponent(follow ? msg : fill(tpl.email, l))}`, onclick: () => markContacted(l) });
+  if (igUrl) add("Instagram DM", { href: igUrl, blank: true, onclick: () => { copy(msg); markContacted(l); } });
+  if (fbUrl) add("Facebook", { href: fbUrl, blank: true, onclick: () => { copy(msg); markContacted(l); } });
+  if (!phone && !l.email && !igUrl && !fbUrl) add("Find contact", { href: `https://www.google.com/search?q=${encodeURIComponent(l.name + " " + l.city)}`, blank: true });
+  add("Copy message", { onclick: () => copy(msg) });
+  if (phone) add("Call", { href: `tel:${phone.replace(/[^\d+]/g, "")}` });
+
+  el.querySelector("select").onchange = (e) => {
+    l.status = e.target.value;
+    if (l.status === "contacted" && !l.ts) l.ts = Date.now();
+    store.set("leads", leads); render();
+  };
+  return el;
+}
+
+// ---------- templates & export ----------
+const T = { sms: "t-sms", subj: "t-subj", email: "t-email", follow: "t-follow" };
+for (const [k, id] of Object.entries(T)) { $(id).value = tpl[k]; $(id).oninput = () => { tpl[k] = $(id).value; store.set("tpl", tpl); }; }
+$("t-reset").onclick = () => { tpl = Object.assign({}, DEFAULTS); store.set("tpl", {}); for (const [k, id] of Object.entries(T)) $(id).value = tpl[k]; render(); };
+
+$("export").onclick = () => {
+  const cols = ["name", "cat", "status", "phone", "email", "ig", "fb", "addr", "city"];
+  const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const csv = [cols.concat("contacted", "preview").join(",")].concat(Object.values(leads).map((l) => cols.map((c) => esc(l[c])).concat(esc(l.ts ? new Date(l.ts).toISOString().slice(0, 10) : ""), esc(previewUrl(l))).join(","))).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  a.download = "leads.csv"; a.click();
+};
+
+render();
+</script>
+</body>
+</html>

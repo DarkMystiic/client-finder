@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Website preview</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='6' y='6' width='20' height='20' rx='4' transform='rotate(45 16 16)' fill='%23888'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root { --accent: #e4572e; --bg: #0d0e11; --panel: #16181d; --text: #f4f2ee; --muted: #a3a7b0; --line: #262932; }
+  body.light { --bg: #fbf9f6; --panel: #ffffff; --text: #17140f; --muted: #6b645a; --line: #e8e2d8; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.6 "Inter", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { color: inherit; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+  h1, h2, h3 { font-family: "Archivo", system-ui, sans-serif; line-height: 1.02; margin: 0; letter-spacing: -.02em; }
+
+  .bar { background: #17140f; color: #fff; font-size: 14px; padding: 10px 0; position: sticky; top: 0; z-index: 5; }
+  .bar .wrap { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+  .bar a { background: #e4572e; color: #fff; text-decoration: none; font-weight: 600; padding: 7px 14px; border-radius: 999px; white-space: nowrap; }
+
+  header.top { padding: 22px 0; border-bottom: 1px solid var(--line); }
+  header.top .wrap { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .brand { font-family: "Archivo"; font-weight: 900; font-size: 20px; text-transform: uppercase; letter-spacing: .02em; }
+  .brand::before { content: ""; display: inline-block; width: 12px; height: 12px; background: var(--accent); border-radius: 3px; margin-right: 10px; transform: rotate(45deg); }
+  .btn { display: inline-block; background: var(--accent); color: var(--on-accent, #fff); font-weight: 600; text-decoration: none; padding: 15px 24px; border-radius: 12px; text-align: center; }
+  .btn.small { padding: 10px 16px; font-size: 15px; }
+  .btn.ghost { background: transparent; border: 1.5px solid var(--line); color: var(--text); }
+
+  .hero { position: relative; overflow: hidden; padding: 96px 0 88px; }
+  .hero::before { content: ""; position: absolute; inset: -40% -10% auto auto; width: 70vw; height: 70vw; max-width: 760px; max-height: 760px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--accent) 45%, transparent), transparent 65%); filter: blur(10px); }
+  .hero::after { content: ""; position: absolute; inset: 0; background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px); background-size: 56px 56px; mask-image: linear-gradient(transparent, #000 40%, transparent); opacity: .5; }
+  .hero .wrap { position: relative; z-index: 1; }
+  .kicker { color: var(--accent); font-weight: 600; letter-spacing: .12em; text-transform: uppercase; font-size: 13px; margin-bottom: 16px; }
+  .hero h1 { font-size: clamp(46px, 8vw, 96px); font-weight: 900; text-transform: uppercase; max-width: 12ch; }
+  .hero p { font-size: 21px; color: var(--muted); max-width: 34ch; margin: 22px 0 32px; }
+  .ctas { display: flex; gap: 12px; flex-wrap: wrap; }
+
+  section { padding: 80px 0; border-top: 1px solid var(--line); }
+  section h2 { font-size: clamp(32px, 4.5vw, 48px); font-weight: 900; margin-bottom: 36px; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 26px; }
+  .card .num { font-family: "Archivo"; font-weight: 900; color: var(--accent); font-size: 15px; }
+  .card h3 { font-size: 22px; margin: 14px 0 8px; }
+  .card p { margin: 0; color: var(--muted); font-size: 15px; }
+
+  .visit { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .visit .card h3 { margin-top: 0; }
+  .visit .card p { font-size: 17px; color: var(--text); }
+  .hours { white-space: pre-line; }
+  .big-cta { text-align: center; }
+  .big-cta h2 { margin-bottom: 14px; }
+  .big-cta p { color: var(--muted); margin: 0 0 28px; }
+  footer { padding: 32px 0 48px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); }
+
+  @media (max-width: 820px) {
+    .grid { grid-template-columns: 1fr 1fr; }
+    .visit { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 520px) {
+    .hero { padding: 56px 0 56px; }
+    .hero p { font-size: 18px; }
+    .ctas .btn { width: 100%; }
+    .grid { grid-template-columns: 1fr; }
+    section { padding: 56px 0; }
+    header.top .btn { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="bar"><div class="wrap"><span id="bar-text">Free preview</span><a id="bar-cta" href="#">Make it live for $150</a></div></div>
+<header class="top"><div class="wrap"><div class="brand" id="brand"></div><a class="btn small" id="top-cta" href="#contact"></a></div></header>
+
+<div class="hero"><div class="wrap">
+  <div class="kicker" id="kicker"></div>
+  <h1 id="name"></h1>
+  <p id="tagline"></p>
+  <div class="ctas"><a class="btn" id="hero-cta" href="#contact"></a><a class="btn ghost" id="hero-call" href="#services">What we offer</a></div>
+</div></div>
+
+<section id="services"><div class="wrap"><h2>What we offer</h2><div class="grid" id="grid"></div></div></section>
+
+<section id="contact"><div class="wrap">
+  <h2>Visit us</h2>
+  <div class="visit">
+    <div class="card"><h3>Find us</h3><p id="addr"></p><p style="margin-top:14px"><a class="btn small" id="map" target="_blank" rel="noopener">Get directions</a></p></div>
+    <div class="card"><h3>Hours</h3><p class="hours" id="hours"></p></div>
+  </div>
+</div></section>
+
+<section class="big-cta"><div class="wrap">
+  <h2 id="end-title"></h2>
+  <p>Questions? We're happy to help.</p>
+  <a class="btn" id="end-cta"></a>
+</div></section>
+
+<footer><div class="wrap" id="foot"></div></footer>
+
+<script src="config.js"></script>
+<script src="cats.js"></script>
+<script>
+  // Preview data rides in the URL (#d=base64url JSON), so every lead gets a site with no server.
+  function decode(s) {
+    s = s.replace(/-/g, "+").replace(/_/g, "/");
+    const bytes = Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes));
+  }
+  let d = {};
+  try { d = decode(new URLSearchParams(location.hash.slice(1)).get("d") || ""); } catch { d = {}; }
+  const cat = CATS[d.t] || CATS.home;
+  const name = d.n || "Your Business";
+  const city = d.c || "";
+  const $ = (id) => document.getElementById(id);
+
+  document.title = `${name}: website preview`;
+  document.documentElement.style.setProperty("--accent", cat.accent);
+  if (!cat.dark) document.body.classList.add("light");
+
+  // Readable text on the accent: dark on light accents (yellow, gold), white on the rest.
+  const rgb = cat.accent.match(/\w\w/g).map((h) => parseInt(h, 16));
+  document.documentElement.style.setProperty("--on-accent", rgb[0] * 0.299 + rgb[1] * 0.587 + rgb[2] * 0.114 > 165 ? "#17140f" : "#fff");
+
+  const digits = (d.p || "").replace(/[^\d+]/g, "");
+  const us = digits.replace(/^\+?1/, "");
+  const phone = us.length === 10 ? `(${us.slice(0, 3)}) ${us.slice(3, 6)}-${us.slice(6)}` : d.p;
+  const telHref = d.p ? `tel:${digits}` : "#contact";
+  $("brand").textContent = name;
+  $("kicker").textContent = city ? `${city}'s local favourite` : "Your local favourite";
+  $("name").textContent = name;
+  $("tagline").textContent = cat.tagline;
+  for (const id of ["hero-cta", "end-cta"]) { $(id).textContent = cat.cta; $(id).href = telHref; }
+  if (d.p) { $("hero-call").textContent = `Call ${phone}`; $("hero-call").href = telHref; }
+  $("top-cta").textContent = d.p ? "Call now" : cat.cta;
+  $("top-cta").href = telHref;
+  $("end-title").textContent = cat.cta + ".";
+  $("grid").innerHTML = cat.services.map(([h, p], i) => `<div class="card"><div class="num">0${i + 1}</div><h3></h3><p></p></div>`).join("");
+  [...$("grid").children].forEach((el, i) => { el.querySelector("h3").textContent = cat.services[i][0]; el.querySelector("p").textContent = cat.services[i][1]; });
+  $("addr").textContent = d.a || city || "Add your address here";
+  $("map").href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([name, d.a, city].filter(Boolean).join(", "))}`;
+  $("hours").textContent = d.h ? d.h.replace(/;\s*/g, "\n") : "Mon–Fri 9:00–18:00\nSat 10:00–16:00\nSun closed";
+  $("foot").textContent = `© ${new Date().getFullYear()} ${name}${city ? " · " + city : ""}`;
+
+  // Sticky banner: who made the preview and how to buy it.
+  $("bar-text").textContent = `Free preview made for ${name} by ${ME.name}`;
+  $("bar-cta").textContent = `Make it live for ${ME.price}`;
+  $("bar-cta").href = `mailto:${ME.email}?subject=${encodeURIComponent(`Website for ${name}`)}&body=${encodeURIComponent(`Hi ${ME.name}, I saw the preview you made for ${name}. I'm interested!`)}`;
+</script>
+</body>
+</html>
