@@ -74,6 +74,7 @@
       <label>City or neighbourhood<input id="city" placeholder="e.g. Sacramento, CA" autocomplete="address-level2"></label>
       <label>Within<select id="radius"><option value="5000">5 km</option><option value="10000" selected>10 km</option><option value="25000">25 km</option></select></label>
     </div>
+    <label style="margin-top:12px">Looking for<select id="mode"><option value="new">Businesses with no website</option><option value="refine">Businesses whose website needs work</option></select></label>
     <div class="cats" id="cats"></div>
     <button class="primary" id="go">Find businesses without a website</button>
     <p id="status"></p>
@@ -89,7 +90,10 @@
       <label>Text message<textarea id="t-sms"></textarea></label>
       <label>Email subject<input id="t-subj"></label>
       <label>Email body<textarea id="t-email"></textarea></label>
+      <label>Text message (website needs work) <span class="hint">{issue} = what the check found</span><textarea id="t-sms-r"></textarea></label>
+      <label>Email body (website needs work)<textarea id="t-email-r"></textarea></label>
       <label>Follow-up (after 3 days)<textarea id="t-follow"></textarea></label>
+      <label>Google PageSpeed key (optional) <span class="hint">Adds Google's mobile speed score to website checks. Free: console.cloud.google.com → enable "PageSpeed Insights API" → Credentials → API key. Saved only in this browser.</span><input id="psi-key" autocomplete="off" spellcheck="false"></label>
       <button id="t-reset" class="link" style="justify-self:start">Reset to defaults</button>
     </div>
   </details>
@@ -111,6 +115,8 @@ const DEFAULTS = {
   subj: "I made {name} a free website preview",
   email: "Hi there,\n\nI'm {me}, a web designer. I noticed {name} doesn't have a website yet, so I put together a free preview of what yours could look like:\n\n{link}\n\nIf you like it, I can finish it with your photos, details and booking/contact buttons and get it live for {price} (one-time, no monthly fees from me). Here's more of my work: {portfolio}\n\nHappy to answer any questions.\n\n{me}",
   follow: "Hi again! Just checking whether you got a chance to look at the free preview I made for {name}: {link}\nHappy to change anything you'd like. {me}",
+  smsR: "Hi! I'm {me}, a local web designer. I came across {name} and noticed {issue}. So I made you a free preview of a clean, phone-friendly site: {link}\n\nIf you like it, I can make it live for {price} (one-time). No pressure either way!",
+  emailR: "Hi there,\n\nI'm {me}, a web designer. I came across {name} and noticed {issue}, which can cost you customers who find you on their phone.\n\nSo I put together a free preview of a clean, fast, phone-friendly version:\n\n{link}\n\nIf you like it, I can finish it with your photos, details and booking/contact buttons and get it live for {price} (one-time, no monthly fees from me). Here's more of my work: {portfolio}\n\nHappy to answer any questions.\n\n{me}",
 };
 const STATUSES = { new: "To contact", contacted: "Contacted", replied: "Replied", won: "Won", skip: "Not interested" };
 const FOLLOW_DAYS = 3;
@@ -123,11 +129,13 @@ let tab = "new";
 $("cats").innerHTML = Object.entries(CATS).map(([k, c]) => `<label><input type="checkbox" value="${k}" ${["fight", "hair", "home", "auto"].includes(k) ? "checked" : ""}>${c.label}</label>`).join("");
 $("city").value = store.get("city", "");
 $("radius").value = store.get("radius", "10000");
+$("mode").value = store.get("mode", "new");
 
 // Overpass gives the most results but its free servers are often overloaded, so each try is
 // capped; if all fail, Nominatim (OSM's own search, max 50 per word) fills in.
 const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter"];
-const NO_SITE = (t) => !t.website && !t["contact:website"] && !t.url;
+const siteOf = (t) => (t.website || t["contact:website"] || t.url || "").split(";")[0].trim();
+const NO_SITE = (t) => !siteOf(t);
 const GENERIC = /^(hair salon|salon|barber|barbers|barber shop|barbershop|gym|fitness|restaurant|cafe|café|bakery|car wash|auto repair|tattoo|nails|nail salon|beauty salon)$/i;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -137,9 +145,10 @@ async function fetchTimeout(url, opts, ms) {
   try { return await fetch(url, { ...opts, signal: ctl.signal }); } finally { clearTimeout(timer); }
 }
 
-async function viaOverpass(picked, lat, lon, radius) {
+async function viaOverpass(picked, lat, lon, radius, mode) {
   const around = `(around:${radius},${lat},${lon})`;
-  const parts = picked.flatMap((k) => CATS[k].q).map((q) => q + "[name][!website][!\"contact:website\"][!url]" + around + ";").join("\n");
+  const filter = mode === "refine" ? "[name][website]" : "[name][!website][!\"contact:website\"][!url]";
+  const parts = picked.flatMap((k) => CATS[k].q).map((q) => q + filter + around + ";").join("\n");
   const query = `[out:json][timeout:25];(\n${parts}\n);out center tags 600;`;
   for (const url of OVERPASS) {
     try {
@@ -193,7 +202,8 @@ $("go").onclick = async () => {
   const picked = [...document.querySelectorAll("#cats input:checked")].map((i) => i.value);
   if (!city) return say("Type a city first.");
   if (!picked.length) return say("Pick at least one kind of business.");
-  store.set("city", city); store.set("radius", $("radius").value);
+  const mode = $("mode").value;
+  store.set("city", city); store.set("radius", $("radius").value); store.set("mode", mode);
   $("go").disabled = true;
   try {
     say("Finding " + city + "…");
@@ -203,12 +213,13 @@ $("go").onclick = async () => {
     const cityName = city.split(",")[0].trim();
     say("Searching businesses near " + cityName + "…");
     const radius = $("radius").value;
-    const found = (await viaOverpass(picked, lat, lon, radius)) || (await viaNominatim(picked, lat, lon, radius));
+    const found = (await viaOverpass(picked, lat, lon, radius, mode)) || (await viaNominatim(picked, lat, lon, radius));
     let added = 0;
     for (const { id, tags: t, hint } of found) {
       // Nominatim words are looser than Overpass filters: trust the word's category only for business-like places.
       const cat = catOf(t, picked) || (hint && /^(shop|craft|amenity|leisure|office)$/.test(Object.keys(t)[1]) ? hint : null);
-      if (!cat || leads[id] || !t.name || GENERIC.test(t.name.trim()) || !NO_SITE(t)) continue;
+      if (!cat || leads[id] || !t.name || GENERIC.test(t.name.trim())) continue;
+      if (mode === "refine" ? NO_SITE(t) : !NO_SITE(t)) continue;
       const addr = [[t["addr:housenumber"], t["addr:street"]].filter(Boolean).join(" "), t["addr:city"]].filter(Boolean).join(", ");
       leads[id] = {
         id, cat, name: t.name, city: t["addr:city"] || cityName, addr,
@@ -218,17 +229,84 @@ $("go").onclick = async () => {
         hours: t.opening_hours || "",
         status: "new", ts: 0, found: Date.now(),
       };
+      if (mode === "refine") Object.assign(leads[id], { kind: "refine", site: siteOf(t), issues: quickIssues(siteOf(t)), checked: false });
       added++;
     }
     store.set("leads", leads);
-    say(added ? `Found ${added} new businesses with no website.` : `No new ones (${found.length} checked). Try a bigger radius or more categories.`);
+    const what = mode === "refine" ? "with a website to check" : "with no website";
+    say(added ? `Found ${added} new businesses ${what}.` : `No new ones (${found.length} checked). Try a bigger radius or more categories.`);
     tab = "new"; render();
+    if (mode === "refine") checkAll();
   } catch (e) {
     say(e.message || "Something went wrong. Try again in a minute.");
   } finally { $("go").disabled = false; }
 };
 
 function say(t) { $("status").textContent = t; }
+
+// ---------- website checks ----------
+// Each issue: short = tag on the card, say = phrase for {issue} in messages.
+const SOCIAL = /(facebook\.com|fb\.com|fb\.me|instagram\.com|linktr\.ee|linkin\.bio|yelp\.com|tiktok\.com|twitter\.com|x\.com\/|google\.com\/maps|goo\.gl|maps\.app|booksy\.com|vagaro\.com|styleseat\.com|squareup\.com\/appointments|doordash\.com|ubereats\.com|grubhub\.com)/i;
+const BUILDERS = { "wixsite.com": "Wix", "weebly.com": "Weebly", "square.site": "Square", "godaddysites.com": "GoDaddy", "carrd.co": "Carrd", "webnode.": "Webnode", "jimdo": "Jimdo", "wordpress.com": "WordPress.com", "blogspot.": "Blogger", "sites.google.com": "Google Sites", "site123.me": "Site123", "mystrikingly.com": "Strikingly", "ueniweb.com": "UENI", "yolasite.com": "Yola" };
+
+function quickIssues(url) {
+  const u = url.toLowerCase();
+  if (SOCIAL.test(u)) return [{ k: "social", short: "Social page only", say: "your website link just goes to a social media or booking page, not a site of your own" }];
+  if (/business\.site/.test(u)) return [{ k: "dead", short: "Dead Google site", say: "your website link is a Google business.site page, and Google shut those down in 2024, so it no longer works" }];
+  const b = Object.keys(BUILDERS).find((d) => u.includes(d));
+  if (b) return [{ k: "free", short: `Free ${BUILDERS[b]} address`, say: `your site is on a free ${BUILDERS[b]} address, which looks less trustworthy to customers` }];
+  return [];
+}
+const hostOf = (url) => { try { return new URL(/^https?:/i.test(url) ? url : "https://" + url).hostname; } catch { return ""; } };
+
+// Can the site load securely? An opaque no-cors fetch resolves if the server answered over HTTPS
+// and rejects on DNS failure, refused connection, bad certificate or timeout.
+async function loadsSecurely(url) {
+  const host = hostOf(url);
+  if (!host) return false;
+  try { await fetchTimeout(`https://${host}/`, { mode: "no-cors", cache: "no-store" }, 9000); return true; } catch { return false; }
+}
+
+async function pageSpeed(url, key) {
+  const u = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?strategy=mobile&category=performance&category=seo&key=${encodeURIComponent(key)}&url=${encodeURIComponent(/^https?:/i.test(url) ? url : "https://" + url)}`;
+  const r = await fetchTimeout(u, {}, 60000);
+  const j = await r.json();
+  if (j.error) throw new Error(j.error.message);
+  const lh = j.lighthouseResult, pct = (c) => Math.round((lh.categories[c]?.score ?? 1) * 100);
+  return { perf: pct("performance"), seo: pct("seo"), mobile: lh.audits.viewport?.score !== 0 };
+}
+
+async function checkLead(l) {
+  const issues = quickIssues(l.site);
+  if (!issues.length) {
+    if (!(await loadsSecurely(l.site))) issues.push({ k: "down", short: "Didn't load securely", say: "your website didn't load securely when I tried it (browsers may warn visitors it's 'Not secure')" });
+    else if (store.get("psi", "")) {
+      try {
+        const p = await pageSpeed(l.site, store.get("psi", ""));
+        l.psi = p;
+        if (!p.mobile) issues.push({ k: "mobile", short: "Not phone-friendly", say: "your website isn't set up for phones, so it shows up tiny and hard to use" });
+        if (p.perf < 50) issues.push({ k: "slow", short: `Slow on phones ${p.perf}/100`, say: `your website scored ${p.perf}/100 on Google's mobile speed test` });
+        if (p.seo < 80) issues.push({ k: "seo", short: `Google basics ${p.seo}/100`, say: "your website is missing some basics Google uses to show it in search" });
+      } catch (e) { toast("Google check failed: " + e.message.slice(0, 60)); }
+    }
+  }
+  l.issues = issues; l.checked = true;
+  store.set("leads", leads);
+}
+
+let checking = false;
+async function checkAll() {
+  if (checking) return;
+  checking = true;
+  const todo = Object.values(leads).filter((l) => l.kind === "refine" && !l.checked);
+  let done = 0;
+  const worker = async () => { while (todo.length) { await checkLead(todo.shift()); done++; say(`Checking websites… ${done} done, ${todo.length} left`); if (done % 4 === 0) render(); } };
+  await Promise.all([worker(), worker(), worker()]);
+  checking = false;
+  const bad = Object.values(leads).filter((l) => l.kind === "refine" && l.issues?.length).length;
+  say(`Website checks done: ${bad} businesses have a problem to pitch.` + (store.get("psi", "") ? "" : " Add a Google PageSpeed key in Message templates to also grade speed and phone-friendliness."));
+  render();
+}
 
 // ---------- previews & messages ----------
 function b64url(obj) {
@@ -244,10 +322,12 @@ function previewUrl(l) {
   return new URL("p.html", location.href).href + "#d=" + b64url(d);
 }
 function fill(text, l) {
-  return text.replace(/\{(\w+)\}/g, (m, k) => ({ name: l.name, link: previewUrl(l), me: ME.name, price: ME.price, city: l.city, portfolio: ME.portfolio })[k] ?? m);
+  const issue = l.issues?.[0]?.say || "your website could be working a lot harder for you on phones";
+  return text.replace(/\{(\w+)\}/g, (m, k) => ({ name: l.name, link: previewUrl(l), me: ME.name, price: ME.price, city: l.city, portfolio: ME.portfolio, issue })[k] ?? m);
 }
 const isFollow = (l) => l.status === "contacted" && !l.followed && Date.now() - l.ts > FOLLOW_DAYS * 864e5;
-const msgFor = (l) => fill(isFollow(l) ? tpl.follow : tpl.sms, l);
+const msgFor = (l) => fill(isFollow(l) ? tpl.follow : l.kind === "refine" ? tpl.smsR : tpl.sms, l);
+const emailFor = (l) => fill(isFollow(l) ? tpl.follow : l.kind === "refine" ? tpl.emailR : tpl.email, l);
 
 function markContacted(l) {
   if (l.status === "contacted") l.followed = true;
@@ -272,7 +352,8 @@ function render() {
   $("tabs").querySelectorAll("button").forEach((b) => (b.onclick = () => { tab = b.dataset.t; render(); }));
 
   // Reachable leads first: phone, then email, then social only.
-  const score = (l) => (l.phone ? 4 : 0) + (l.email ? 2 : 0) + (l.ig || l.fb ? 1 : 0);
+  // Redesign leads with a found problem rank with the no-website ones; unchecked or clean sites sink.
+  const score = (l) => (l.phone ? 4 : 0) + (l.email ? 2 : 0) + (l.ig || l.fb ? 1 : 0) + (l.kind === "refine" ? (l.issues?.length ? 0 : -8) : 0);
   const rows = all.filter((l) => inTab(l, tab)).sort((a, b) => score(b) - score(a) || a.name.localeCompare(b.name));
   if (!rows.length) {
     $("list").innerHTML = `<div class="empty">${all.length ? "Nothing here yet." : "Search a city above to find your first leads."}</div>`;
@@ -302,7 +383,11 @@ function card(l) {
   el.querySelector(".meta").textContent = `${CATS[l.cat].label}${l.addr ? " · " + l.addr : " · " + l.city}${since}`;
   const tags = el.querySelector(".tags");
   const tag = (t, hot) => { const s = document.createElement("span"); s.className = "tag" + (hot ? " hot" : ""); s.textContent = t; tags.appendChild(s); };
-  tag("No website", true);
+  if (l.kind === "refine") {
+    tag("Site: " + (hostOf(l.site) || l.site));
+    if (l.issues?.length) l.issues.forEach((i) => tag(i.short, true));
+    else tag(l.checked ? (l.psi ? "Site looks OK" : "Loads OK · add Google key to grade") : "Checking…");
+  } else tag("No website", true);
   if (phone) tag("📞 " + phone);
   if (l.email) tag("✉ " + l.email);
   if (l.ig) tag("Instagram");
@@ -320,12 +405,16 @@ function card(l) {
   const follow = isFollow(l);
   add("Preview ↗", { href: previewUrl(l), blank: true });
   if (phone) add(follow ? "Text follow-up" : "Text", { primary: true, href: `sms:${phone.replace(/[^\d+]/g, "")}?&body=${encodeURIComponent(msg)}`, onclick: () => markContacted(l) });
-  if (l.email) add(follow ? "Email follow-up" : "Email", { primary: !phone, href: `mailto:${l.email}?subject=${encodeURIComponent(fill(tpl.subj, l))}&body=${encodeURIComponent(follow ? msg : fill(tpl.email, l))}`, onclick: () => markContacted(l) });
+  if (l.email) add(follow ? "Email follow-up" : "Email", { primary: !phone, href: `mailto:${l.email}?subject=${encodeURIComponent(fill(tpl.subj, l))}&body=${encodeURIComponent(emailFor(l))}`, onclick: () => markContacted(l) });
   if (igUrl) add("Instagram DM", { href: igUrl, blank: true, onclick: () => { copy(msg); markContacted(l); } });
   if (fbUrl) add("Facebook", { href: fbUrl, blank: true, onclick: () => { copy(msg); markContacted(l); } });
   if (!phone && !l.email && !igUrl && !fbUrl) add("Find contact", { href: `https://www.google.com/search?q=${encodeURIComponent(l.name + " " + l.city)}`, blank: true });
   add("Copy message", { onclick: () => copy(msg) });
   if (phone) add("Call", { href: `tel:${phone.replace(/[^\d+]/g, "")}` });
+  if (l.kind === "refine") {
+    add("Their site ↗", { href: /^https?:/i.test(l.site) ? l.site : "https://" + l.site, blank: true });
+    add("Re-check site", { onclick: async (e) => { e.target.textContent = "Checking…"; await checkLead(l); render(); } });
+  }
 
   el.querySelector("select").onchange = (e) => {
     l.status = e.target.value;
@@ -336,20 +425,23 @@ function card(l) {
 }
 
 // ---------- templates & export ----------
-const T = { sms: "t-sms", subj: "t-subj", email: "t-email", follow: "t-follow" };
+const T = { sms: "t-sms", subj: "t-subj", email: "t-email", smsR: "t-sms-r", emailR: "t-email-r", follow: "t-follow" };
+$("psi-key").value = store.get("psi", "");
+$("psi-key").onchange = () => { store.set("psi", $("psi-key").value.trim()); toast($("psi-key").value.trim() ? "Google key saved" : "Google key removed"); };
 for (const [k, id] of Object.entries(T)) { $(id).value = tpl[k]; $(id).oninput = () => { tpl[k] = $(id).value; store.set("tpl", tpl); }; }
 $("t-reset").onclick = () => { tpl = Object.assign({}, DEFAULTS); store.set("tpl", {}); for (const [k, id] of Object.entries(T)) $(id).value = tpl[k]; render(); };
 
 $("export").onclick = () => {
-  const cols = ["name", "cat", "status", "phone", "email", "ig", "fb", "addr", "city"];
+  const cols = ["name", "cat", "status", "phone", "email", "ig", "fb", "addr", "city", "site"];
   const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const csv = [cols.concat("contacted", "preview").join(",")].concat(Object.values(leads).map((l) => cols.map((c) => esc(l[c])).concat(esc(l.ts ? new Date(l.ts).toISOString().slice(0, 10) : ""), esc(previewUrl(l))).join(","))).join("\n");
+  const csv = [cols.concat("issues", "contacted", "preview").join(",")].concat(Object.values(leads).map((l) => cols.map((c) => esc(l[c])).concat(esc((l.issues || []).map((i) => i.short).join("; ")), esc(l.ts ? new Date(l.ts).toISOString().slice(0, 10) : ""), esc(previewUrl(l))).join(","))).join("\n");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
   a.download = "leads.csv"; a.click();
 };
 
 render();
+checkAll(); // finish any website checks a closed tab left unfinished
 </script>
 </body>
 </html>
