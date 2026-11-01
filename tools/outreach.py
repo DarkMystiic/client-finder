@@ -45,7 +45,8 @@ BAD_EMAIL = re.compile(r"\.(png|jpe?g|gif|svg|webp|css|js)$|example\.|sentry|wix
                        r"@email\.|godaddy|squarespace|shopify\.com|yelp\.|facebook|instagram|google\.|"
                        r"noreply|no-reply|privacy@|abuse@|webmaster@", re.I)
 SOCIAL = re.compile(r"facebook\.com|fb\.com|instagram\.com|linktr\.ee|yelp\.com|tiktok\.com|booksy\.com|"
-                    r"vagaro\.com|styleseat\.com|google\.com/maps|maps\.app", re.I)
+                    r"vagaro\.com|styleseat\.com|setmore\.com|schedulicity\.com|square\.site|squareup\.com|"
+                    r"google\.com/maps|maps\.app", re.I)
 STOP = {"the", "and", "of", "inc", "llc", "co", "shop", "salon", "barber", "barbershop", "auto", "repair",
         "automotive", "body", "hair", "cuts", "gym", "studio", "center", "service", "services"}
 
@@ -82,6 +83,8 @@ def same_business(ours, text):
 
 def clean_email(e):
     e = e.strip().strip(".").lower()
+    # Text glued onto the address ("…@sbcglobal.nettelephone"): cut back to the real ending.
+    e = re.sub(r"(\.(?:com|net|org|biz|info|us))[a-z]+$", r"\1", e)
     return e if EMAIL_RE.fullmatch(e) and not BAD_EMAIL.search(e) else ""
 
 
@@ -147,45 +150,124 @@ def emails_from_site(url):
     return sorted(found, key=lambda f: not f[0].endswith("@" + site))
 
 
-def emails_from_search(name, city):
-    """Web search fallback for businesses with no site: emails in result snippets that also name the business."""
+FREE_MAIL = {"gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "icloud.com", "aol.com", "live.com", "msn.com", "comcast.net", "att.net", "sbcglobal.net"}
+
+
+def own_domain(name, domain):
+    """Does a domain look like the business's own (charlesgracie.com for "Charles Gracie Jiu Jitsu")?"""
+    label = re.sub(r"[^a-z0-9]", "", domain.split(".")[0])
+    compact = "".join(words(name))
+    key = "".join(w for w in words(name) if w not in STOP) or compact
+    return len(label) >= 5 and (label in compact or (len(key) >= 4 and key in label))
+
+
+# Same checks as the web app's website-needs-work mode (index.html quickIssues + loadsSecurely),
+# as (tag, phrase for the email). Speed/phone grading needs Google PageSpeed and stays in the app.
+BUILDERS = {"wixsite.com": "Wix", "weebly.com": "Weebly", "square.site": "Square", "godaddysites.com": "GoDaddy",
+            "carrd.co": "Carrd", "wordpress.com": "WordPress.com", "blogspot.": "Blogger", "sites.google.com": "Google Sites",
+            "mystrikingly.com": "Strikingly", "yolasite.com": "Yola", "site123.me": "Site123", "jimdo": "Jimdo"}
+
+
+def site_issues(url):
+    u = url.lower()
+    if SOCIAL.search(u):
+        return [("Social page only", "your website link just goes to a social media or booking page, not a site of your own")]
+    if "business.site" in u:
+        return [("Dead Google site", "your website link is a Google business.site page, and Google shut those down in 2024, so it no longer works")]
+    for d, b in BUILDERS.items():
+        if d in u:
+            return [(f"Free {b} address", f"your site is on a free {b} address, which looks less trustworthy to customers")]
     try:
-        from ddgs import DDGS
-        hits = DDGS(timeout=12).text(f'"{name}" {city} email', max_results=8, backend="duckduckgo")
-    except Exception:
+        session.head("https://" + domain_of(url) + "/", timeout=9, allow_redirects=True)
         return []
-    found = []
-    for h in hits or []:
+    except Exception:
+        return [("Didn't load securely", "your website didn't load securely when I tried it (browsers may warn visitors it's 'Not secure')")]
+
+
+def issue_phrase(tag):
+    """Email phrase for an issue tag, including the tags the web app exports."""
+    t = tag.lower()
+    m = re.search(r"(\d+)/100", t)
+    for key, say in [("social", site_issues("facebook.com")[0][1]), ("dead google", site_issues("x.business.site")[0][1]),
+                     ("didn't load", "your website didn't load securely when I tried it (browsers may warn visitors it's 'Not secure')"),
+                     ("not phone", "your website isn't set up for phones, so it shows up tiny and hard to use"),
+                     ("slow on phones", f"your website scored {m.group(1) if m else 'low'}/100 on Google's mobile speed test"),
+                     ("google basics", "your website is missing some basics Google uses to show it in search")]:
+        if key in t:
+            return say
+    b = re.match(r"free (.+) address", tag, re.I)
+    return f"your site is on a free {b.group(1)} address, which looks less trustworthy to customers" if b else \
+        "your website could be working a lot harder for you on phones"
+
+
+def web_search(query):
+    # Bing answers reliably through ddgs; its DuckDuckGo backend often returns nothing from this PC (2026-11-01).
+    from ddgs import DDGS
+    for backend in ("bing", "bing", "duckduckgo"):  # Bing sometimes answers empty, a second try usually works
+        try:
+            hits = DDGS(timeout=12).text(query, max_results=10, backend=backend)
+            if hits:
+                return hits
+        except Exception:
+            pass
+    return []
+
+
+def emails_from_search(name, city):
+    """For leads with no site on file: search the web, read the business's own site if one turns up,
+    and keep snippet emails only when they are on a free mail provider or the business's own domain
+    (so directory addresses like profiles@birdeye.com never get through).
+    Returns (emails, the business's own site if the search found one)."""
+    hits = web_search(f'"{name}" {city} email')
+    found, site = [], ""
+    for h in hits:
+        d = domain_of(h.get("href", ""))
+        if own_domain(name, d) and not SOCIAL.search(d):
+            site = site or f"https://{urlparse(h['href']).netloc}/"
+            found = emails_from_site(h["href"])
+            if found:
+                return found, site
+    for h in hits:
         text = f"{h.get('title', '')} {h.get('body', '')}"
         if not same_business(name, text):
             continue
         for e in EMAIL_RE.findall(text):
-            e = clean_email(e)
-            if e and e not in [f[0] for f in found]:
+            e, dom = clean_email(e), e.split("@")[-1].lower()
+            if e and (dom in FREE_MAIL or own_domain(name, dom)) and e not in [f[0] for f in found]:
                 found.append((e, h.get("href", "web search")))
-    return found
+    return found, site
 
 
 def cmd_find(path):
     rows = list(csv.DictReader(open(path, encoding="utf-8-sig")))
     out = Path(path).with_name(Path(path).stem + "_emails.csv")
     cols = list(rows[0].keys()) + [c for c in ("email_source",) if c not in rows[0]]
+    # Search results vary run to run, so a rerun keeps what earlier runs found and only searches the rest.
+    before = {r["name"]: r for r in csv.DictReader(open(out, encoding="utf-8"))} if out.exists() else {}
     got = 0
     for i, r in enumerate(rows, 1):
         print(f"[{i}/{len(rows)}] {r['name']}", end=" ", flush=True)
         r.setdefault("email_source", "")
+        old = before.get(r["name"])
+        if old and old.get("email") and not r.get("email"):
+            for k in ("email", "email_source", "site", "issues"):
+                r[k] = old.get(k, "")
         if r.get("email"):
             r["email_source"] = r["email_source"] or "Client Finder (OpenStreetMap)"
         else:
             site = (r.get("site") or "").strip()
             found = emails_from_site(site) if site and not SOCIAL.search(site) else []
             if not found:
-                found = emails_from_search(r["name"], r.get("city", ""))
+                found, own = emails_from_search(r["name"], r.get("city", ""))
+                if own and not site:
+                    # Not website-less after all: record it and check it like the app does, so "send" pitches
+                    # only a real problem and never says "you don't have a website".
+                    r["site"], r["issues"] = own, "; ".join(t for t, _ in site_issues(own))
                 time.sleep(2)  # be gentle with the search engine
             if found:
                 r["email"], r["email_source"] = found[0]
         got += bool(r["email"])
-        print("->", r["email"] or "-", flush=True)
+        print("->", r["email"] or "-", f"(has a website: {r['site']})" if r.get("site") else "", flush=True)
     with open(out, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=cols, extrasaction="ignore")
         w.writeheader()
@@ -204,10 +286,9 @@ def load_config():
 
 def compose(r, cfg):
     name, link = r["name"], r.get("preview", "")
-    issue = (r.get("issues") or "").split(";")[0].strip()
     if r.get("site"):
-        opener = f"I came across {name} and noticed a few things on your website ({issue.lower() or 'mainly on phones'}) " \
-                 "that can cost you customers who find you on their phone.\n\nSo I put together a free preview of a clean, " \
+        opener = f"I came across {name} and noticed {issue_phrase((r.get('issues') or '').split(';')[0].strip())}, " \
+                 "which can cost you customers who find you on their phone.\n\nSo I put together a free preview of a clean, " \
                  "fast, phone-friendly version:"
     else:
         opener = f"I noticed {name} doesn't have a website yet, so I put together a free preview of what yours could look like:"
@@ -222,7 +303,9 @@ def compose(r, cfg):
 def cmd_send(path, really, limit):
     cfg = load_config()
     if not cfg["postal_address"].strip():
-        sys.exit(f"Add your postal address to {CONFIG} first (US law requires one in every cold email).")
+        if really:
+            sys.exit(f"Add your postal address to {CONFIG} first (US law requires one in every cold email).")
+        cfg["postal_address"] = "[YOUR POSTAL ADDRESS - add it in config.json before sending]"
     sent = json.loads(SENT.read_text(encoding="utf-8")) if SENT.exists() else {}
     optout = {l.strip().lower() for l in OPTOUT.read_text(encoding="utf-8").splitlines()} if OPTOUT.exists() else set()
     today = str(date.today())
