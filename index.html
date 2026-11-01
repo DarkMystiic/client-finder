@@ -49,6 +49,15 @@
   .acts { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 8px; margin-top: 14px; }
   .acts .btn, .acts button { padding: 11px 10px; }
   .lead select { width: auto; padding: 6px 8px; font-size: 13px; font-weight: 600; }
+  .golive { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; display: grid; gap: 8px; }
+  .golive .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .golive .row > label { display: flex; align-items: center; gap: 9px; font-weight: 500; font-size: 14px; }
+  .golive .row > label input { width: auto; margin: 0; accent-color: var(--good); }
+  .golive .row:has(> label input:checked) > label { color: var(--muted); text-decoration: line-through; }
+  .golive .btn, .golive button { padding: 7px 11px; font-size: 13px; }
+  .golive input[type=text] { width: 210px; padding: 7px 10px; font-size: 14px; }
+  .summary { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; margin-bottom: 12px; font-weight: 600; }
+  .summary b { color: var(--good); }
   .empty { text-align: center; color: var(--muted); padding: 36px 12px; }
   details summary { cursor: pointer; font-weight: 600; }
   .tpl { display: grid; gap: 12px; margin-top: 14px; }
@@ -85,7 +94,7 @@
 
   <details class="panel">
     <summary>Message templates</summary>
-    <p class="hint">Placeholders: {name} {link} {me} {price} {city} {portfolio}</p>
+    <p class="hint">Placeholders: {name} {link} {me} {price} {care} {city} {portfolio} {pay} {carepay}</p>
     <div class="tpl">
       <label>Text message<textarea id="t-sms"></textarea></label>
       <label>Email subject<input id="t-subj"></label>
@@ -93,6 +102,9 @@
       <label>Text message (website needs work) <span class="hint">{issue} = what the check found</span><textarea id="t-sms-r"></textarea></label>
       <label>Email body (website needs work)<textarea id="t-email-r"></textarea></label>
       <label>Follow-up (after 3 days)<textarea id="t-follow"></textarea></label>
+      <label>Payment message (Won leads) <span class="hint">{pay} and {carepay} = your two payment links below</span><textarea id="t-pay"></textarea></label>
+      <label>Setup payment link <span class="hint">Stripe → Payment Links → New: one-time, your setup price. Saved only in this browser.</span><input id="pay-link" placeholder="https://buy.stripe.com/…" autocomplete="off" spellcheck="false"></label>
+      <label>Care plan payment link <span class="hint">Stripe → Payment Links → New: recurring monthly, your care price. Stripe handles renewals, receipts and cancelling.</span><input id="care-link" placeholder="https://buy.stripe.com/…" autocomplete="off" spellcheck="false"></label>
       <label>Google PageSpeed key (optional) <span class="hint">Adds Google's mobile speed score to website checks. Free: console.cloud.google.com → enable "PageSpeed Insights API" → Credentials → API key. Saved only in this browser.</span><input id="psi-key" autocomplete="off" spellcheck="false"></label>
       <label>Google Places key (for "Look up contacts") <span class="hint">Finds each lead's phone number and spots ones that already have a website. Same steps as above but enable "Places API (New)"; needs billing turned on, first 1,000 lookups a month are free. Restrict the key to this site's address. Saved only in this browser.</span><input id="places-key" autocomplete="off" spellcheck="false"></label>
       <button id="t-reset" class="link" style="justify-self:start">Reset to defaults</button>
@@ -114,10 +126,11 @@ const store = {
 const DEFAULTS = {
   sms: "Hi! I'm {me}, a local web designer. I noticed {name} doesn't have a website yet, so I made you a free preview of what one could look like: {link}\n\nIf you like it, I can make it live for {price} (one-time). No pressure either way!",
   subj: "I made {name} a free website preview",
-  email: "Hi there,\n\nI'm {me}, a web designer. I noticed {name} doesn't have a website yet, so I put together a free preview of what yours could look like:\n\n{link}\n\nIf you like it, I can finish it with your photos, details and booking/contact buttons and get it live for {price} (one-time, no monthly fees from me). Here's more of my work: {portfolio}\n\nHappy to answer any questions.\n\n{me}",
+  email: "Hi there,\n\nI'm {me}, a web designer. I noticed {name} doesn't have a website yet, so I put together a free preview of what yours could look like:\n\n{link}\n\nIf you like it, I can finish it with your photos, details and booking/contact buttons and get it live for {price} (one-time). If you'd like, I can also host it and make any changes you need for {care}, but that part is optional. Here's more of my work: {portfolio}\n\nHappy to answer any questions.\n\n{me}",
   follow: "Hi again! Just checking whether you got a chance to look at the free preview I made for {name}: {link}\nHappy to change anything you'd like. {me}",
   smsR: "Hi! I'm {me}, a local web designer. I came across {name} and noticed {issue}. So I made you a free preview of a clean, phone-friendly site: {link}\n\nIf you like it, I can make it live for {price} (one-time). No pressure either way!",
-  emailR: "Hi there,\n\nI'm {me}, a web designer. I came across {name} and noticed {issue}, which can cost you customers who find you on their phone.\n\nSo I put together a free preview of a clean, fast, phone-friendly version:\n\n{link}\n\nIf you like it, I can finish it with your photos, details and booking/contact buttons and get it live for {price} (one-time, no monthly fees from me). Here's more of my work: {portfolio}\n\nHappy to answer any questions.\n\n{me}",
+  emailR: "Hi there,\n\nI'm {me}, a web designer. I came across {name} and noticed {issue}, which can cost you customers who find you on their phone.\n\nSo I put together a free preview of a clean, fast, phone-friendly version:\n\n{link}\n\nIf you like it, I can finish it with your photos, details and booking/contact buttons and get it live for {price} (one-time). If you'd like, I can also host it and make any changes you need for {care}, but that part is optional. Here's more of my work: {portfolio}\n\nHappy to answer any questions.\n\n{me}",
+  pay: "Awesome, thank you! Here's the link for the {price} setup: {pay}\n\nOptional care plan ({care}): I host the site and make any small changes you send me within 48 hours, so you never have to touch it: {carepay}\n\nAs soon as the setup is paid I'll get {name} live. {me}",
 };
 const STATUSES = { new: "To contact", contacted: "Contacted", replied: "Replied", won: "Won", skip: "Not interested" };
 const FOLLOW_DAYS = 3;
@@ -372,16 +385,18 @@ function b64url(obj) {
   let s = ""; bytes.forEach((b) => (s += String.fromCharCode(b)));
   return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
-function previewUrl(l) {
+function siteData(l) {
   const d = { n: l.name, t: l.cat, c: l.city };
   if (l.phone) d.p = l.phone.split(";")[0].trim();
   if (l.addr) d.a = l.addr;
   if (l.hours) d.h = l.hours;
-  return new URL("p.html", location.href).href + "#d=" + b64url(d);
+  return d;
 }
+const previewUrl = (l) => new URL("p.html", location.href).href + "#d=" + b64url(siteData(l));
 function fill(text, l) {
   const issue = l.issues?.[0]?.say || "your website could be working a lot harder for you on phones";
-  return text.replace(/\{(\w+)\}/g, (m, k) => ({ name: l.name, link: previewUrl(l), me: ME.name, price: ME.price, city: l.city, portfolio: ME.portfolio, issue })[k] ?? m);
+  const vals = { name: l.name, link: previewUrl(l), me: ME.name, price: ME.price, care: ME.care, city: l.city, portfolio: ME.portfolio, issue, pay: store.get("pay", ""), carepay: store.get("carepay", "") };
+  return text.replace(/\{(\w+)\}/g, (m, k) => vals[k] ?? m);
 }
 const isFollow = (l) => l.status === "contacted" && !l.followed && Date.now() - l.ts > FOLLOW_DAYS * 864e5;
 const msgFor = (l) => fill(isFollow(l) ? tpl.follow : l.kind === "refine" ? tpl.smsR : tpl.sms, l);
@@ -418,6 +433,13 @@ function render() {
     return;
   }
   $("list").innerHTML = "";
+  if (tab === "won") {
+    const care = rows.filter((l) => l.live?.care).length, per = parseFloat(String(ME.care).replace(/[^\d.]/g, "")) || 0;
+    const s = document.createElement("div");
+    s.className = "summary";
+    s.innerHTML = `${rows.length} client${rows.length === 1 ? "" : "s"} · ${rows.filter((l) => l.live?.paid).length} paid · ${care} on the care plan = <b>$${care * per}/mo recurring</b>`;
+    $("list").appendChild(s);
+  }
   for (const l of rows) $("list").appendChild(card(l));
 }
 
@@ -475,6 +497,8 @@ function card(l) {
     add("Re-check site", { onclick: async (e) => { e.target.textContent = "Checking…"; await checkLead(l); render(); } });
   }
 
+  if (l.status === "won") el.appendChild(goLive(l));
+
   el.querySelector("select").onchange = (e) => {
     l.status = e.target.value;
     if (l.status === "contacted" && !l.ts) l.ts = Date.now();
@@ -483,8 +507,84 @@ function card(l) {
   return el;
 }
 
+// ---------- go live (won leads) ----------
+// One checklist per client: export → host → domain → payment → care plan. Ticks save on the lead.
+const STEPS = [
+  ["export", "Export the site"],
+  ["host", "Upload to Cloudflare Pages"],
+  ["domain", "Connect their domain"],
+  ["sent", "Send the payment links"],
+  ["paid", "Setup paid"],
+  ["care", `On the care plan (${ME.care})`],
+];
+function goLive(l) {
+  l.live ??= {};
+  const box = document.createElement("div");
+  box.className = "golive";
+  const save = () => { store.set("leads", leads); };
+  for (const [k, text] of STEPS) {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = `<label><input type="checkbox"><span></span></label><span class="do"></span>`;
+    row.querySelector("span").textContent = text;
+    const cb = row.querySelector("input");
+    cb.checked = !!l.live[k];
+    cb.onchange = () => { l.live[k] = cb.checked; save(); if (k === "care" || k === "paid") render(); };
+    const tick = () => { l.live[k] = cb.checked = true; save(); };
+    const act = (label, opts) => {
+      const a = document.createElement(opts.href ? "a" : "button");
+      a.className = "btn"; a.textContent = label;
+      if (opts.href) { a.href = opts.href; a.target = "_blank"; a.rel = "noopener"; }
+      a.onclick = opts.onclick || null;
+      row.querySelector(".do").appendChild(a);
+    };
+    if (k === "export") act("Download index.html", { onclick: async () => { if (await exportSite(l)) tick(); } });
+    if (k === "host") act("Open Cloudflare ↗", { href: "https://dash.cloudflare.com/", onclick: () => toast("Workers & Pages → Create → Pages → Upload assets") });
+    if (k === "domain") {
+      const inp = document.createElement("input");
+      inp.type = "text"; inp.placeholder = "e.g. joesbarber.com"; inp.value = l.live.url || "";
+      inp.onchange = () => { l.live.url = inp.value.trim().replace(/^https?:\/\//, "").replace(/\/$/, ""); save(); render(); };
+      row.querySelector(".do").appendChild(inp);
+      if (l.live.url) act("Open ↗", { href: "https://" + l.live.url });
+    }
+    if (k === "sent") act("Copy payment message", { onclick: () => {
+      if (!store.get("pay", "")) return toast("Add your payment links in Message templates first");
+      copy(fill(tpl.pay, l)); tick();
+    } });
+    box.appendChild(row);
+  }
+  return box;
+}
+
+// The live site is the preview page with the lead's data baked in (window.SITE) and the
+// config/category scripts inlined, so it's one self-contained index.html any static host serves.
+async function exportSite(l) {
+  try {
+    const get = async (f) => { const r = await fetch(f, { cache: "no-store" }); if (!r.ok) throw new Error(f); return r.text(); };
+    const [page, cats, conf] = await Promise.all([get("p.html"), get("cats.js"), get("config.js")]);
+    const site = JSON.stringify(siteData(l)).replace(/</g, "\\u003c");
+    const html = page
+      .replace(/<meta name="robots"[^>]*>\s*/, "")
+      // "<\/script>" stays escaped: a literal closing tag would end this page's own script block.
+      .replace('<script src="config.js"><\/script>', () => `<script>\n${conf}<\/script>`)
+      .replace('<script src="cats.js"><\/script>', () => `<script>\nwindow.SITE = ${site};\n${cats}<\/script>`);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+    a.download = "index.html"; a.click();
+    toast("Saved index.html: put it in a folder named after the client");
+    return true;
+  } catch {
+    toast("Export needs the hosted app (or a local server), not a file:// page");
+    return false;
+  }
+}
+
 // ---------- templates & export ----------
-const T = { sms: "t-sms", subj: "t-subj", email: "t-email", smsR: "t-sms-r", emailR: "t-email-r", follow: "t-follow" };
+const T = { sms: "t-sms", subj: "t-subj", email: "t-email", smsR: "t-sms-r", emailR: "t-email-r", follow: "t-follow", pay: "t-pay" };
+for (const [id, k] of [["pay-link", "pay"], ["care-link", "carepay"]]) {
+  $(id).value = store.get(k, "");
+  $(id).onchange = () => { store.set(k, $(id).value.trim()); toast("Payment link saved"); };
+}
 $("psi-key").value = store.get("psi", "");
 $("psi-key").onchange = () => { store.set("psi", $("psi-key").value.trim()); toast($("psi-key").value.trim() ? "Google key saved" : "Google key removed"); };
 $("places-key").value = store.get("places", "");
@@ -496,7 +596,7 @@ $("t-reset").onclick = () => { tpl = Object.assign({}, DEFAULTS); store.set("tpl
 $("export").onclick = () => {
   const cols = ["name", "cat", "status", "phone", "email", "ig", "fb", "addr", "city", "site"];
   const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const csv = [cols.concat("issues", "contacted", "preview").join(",")].concat(Object.values(leads).map((l) => cols.map((c) => esc(l[c])).concat(esc((l.issues || []).map((i) => i.short).join("; ")), esc(l.ts ? new Date(l.ts).toISOString().slice(0, 10) : ""), esc(previewUrl(l))).join(","))).join("\n");
+  const csv = [cols.concat("issues", "contacted", "preview", "live_domain", "care_plan").join(",")].concat(Object.values(leads).map((l) => cols.map((c) => esc(l[c])).concat(esc((l.issues || []).map((i) => i.short).join("; ")), esc(l.ts ? new Date(l.ts).toISOString().slice(0, 10) : ""), esc(previewUrl(l)), esc(l.live?.url), esc(l.live?.care ? "yes" : "")).join(","))).join("\n");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
   a.download = "leads.csv"; a.click();

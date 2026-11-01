@@ -103,19 +103,21 @@
 <script src="cats.js"></script>
 <script>
   // Preview data rides in the URL (#d=base64url JSON), so every lead gets a site with no server.
+  // A live site exported from Client Finder carries the same data in window.SITE instead.
   function decode(s) {
     s = s.replace(/-/g, "+").replace(/_/g, "/");
     const bytes = Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
     return JSON.parse(new TextDecoder().decode(bytes));
   }
-  let d = {};
-  try { d = decode(new URLSearchParams(location.hash.slice(1)).get("d") || ""); } catch { d = {}; }
+  const live = !!window.SITE;
+  let d = window.SITE || {};
+  if (!live) try { d = decode(new URLSearchParams(location.hash.slice(1)).get("d") || ""); } catch { d = {}; }
   const cat = CATS[d.t] || CATS.home;
   const name = d.n || "Your Business";
   const city = d.c || "";
   const $ = (id) => document.getElementById(id);
 
-  document.title = `${name}: website preview`;
+  document.title = live ? `${name}${city ? " · " + city : ""}` : `${name}: website preview`;
   document.documentElement.style.setProperty("--accent", cat.accent);
   if (!cat.dark) document.body.classList.add("light");
 
@@ -143,10 +145,18 @@
   $("hours").textContent = d.h ? d.h.replace(/;\s*/g, "\n") : "Mon–Fri 9:00–18:00\nSat 10:00–16:00\nSun closed";
   $("foot").textContent = `© ${new Date().getFullYear()} ${name}${city ? " · " + city : ""}`;
 
-  // Sticky banner: who made the preview and how to buy it.
-  $("bar-text").textContent = `Free preview made for ${name} by ${ME.name}`;
-  $("bar-cta").textContent = `Make it live for ${ME.price}`;
-  $("bar-cta").href = `mailto:${ME.email}?subject=${encodeURIComponent(`Website for ${name}`)}&body=${encodeURIComponent(`Hi ${ME.name}, I saw the preview you made for ${name}. I'm interested!`)}`;
+  if (live) {
+    // Live site: no sales banner, just a small credit that brings in referrals.
+    document.querySelector(".bar").remove();
+    const credit = document.createElement("a");
+    credit.href = ME.portfolio; credit.textContent = `Website by ${ME.name}`;
+    $("foot").append(" · ", credit);
+  } else {
+    // Sticky banner: who made the preview and how to buy it.
+    $("bar-text").textContent = `Free preview made for ${name} by ${ME.name}`;
+    $("bar-cta").textContent = `Make it live for ${ME.price}`;
+    $("bar-cta").href = `mailto:${ME.email}?subject=${encodeURIComponent(`Website for ${name}`)}&body=${encodeURIComponent(`Hi ${ME.name}, I saw the preview you made for ${name}. I'm interested!`)}`;
+  }
 </script>
 </body>
 </html>

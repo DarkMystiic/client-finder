@@ -4,4 +4,5 @@ const ME = {
   email: "jaylendgotico@gmail.com",
   portfolio: "https://darkmystiic.github.io/portfolio/",
   price: "$150",
+  care: "$50/mo", // optional care plan: hosting + small edits
 };
