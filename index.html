@@ -66,7 +66,7 @@
 <div class="wrap">
   <header>
     <div><h1>Client <span>Finder</span></h1><p class="sub">Local businesses with no website → a free preview → one tap to send.</p></div>
-    <button class="link" id="export">Export CSV</button>
+    <div><button class="link" id="lookup">Look up contacts</button><button class="link" id="export">Export CSV</button></div>
   </header>
 
   <div class="panel">
@@ -94,6 +94,7 @@
       <label>Email body (website needs work)<textarea id="t-email-r"></textarea></label>
       <label>Follow-up (after 3 days)<textarea id="t-follow"></textarea></label>
       <label>Google PageSpeed key (optional) <span class="hint">Adds Google's mobile speed score to website checks. Free: console.cloud.google.com → enable "PageSpeed Insights API" → Credentials → API key. Saved only in this browser.</span><input id="psi-key" autocomplete="off" spellcheck="false"></label>
+      <label>Google Places key (for "Look up contacts") <span class="hint">Finds each lead's phone number and spots ones that already have a website. Same steps as above but enable "Places API (New)"; needs billing turned on, first 1,000 lookups a month are free. Restrict the key to this site's address. Saved only in this browser.</span><input id="places-key" autocomplete="off" spellcheck="false"></label>
       <button id="t-reset" class="link" style="justify-self:start">Reset to defaults</button>
     </div>
   </details>
@@ -237,6 +238,7 @@ $("go").onclick = async () => {
     say(added ? `Found ${added} new businesses ${what}.` : `No new ones (${found.length} checked). Try a bigger radius or more categories.`);
     tab = "new"; render();
     if (mode === "refine") checkAll();
+    if (added && store.get("places", "")) lookupAll();
   } catch (e) {
     say(e.message || "Something went wrong. Try again in a minute.");
   } finally { $("go").disabled = false; }
@@ -306,6 +308,62 @@ async function checkAll() {
   const bad = Object.values(leads).filter((l) => l.kind === "refine" && l.issues?.length).length;
   say(`Website checks done: ${bad} businesses have a problem to pitch.` + (store.get("psi", "") ? "" : " Add a Google PageSpeed key in Message templates to also grade speed and phone-friendliness."));
   render();
+}
+
+// ---------- contact lookup (Google Places) ----------
+// OSM rarely has phone numbers and often misses websites (chains look website-less), so each lead
+// is looked up once on Google. Found phone fills in; a found website turns the lead into a
+// "website needs work" lead so the normal site checks decide if it's still worth pitching.
+const STOP = new Set(["the", "and", "of", "inc", "llc", "co", "shop", "salon", "barber", "barbershop", "auto", "repair", "automotive", "body", "hair", "cuts", "gym", "studio", "center", "service", "services"]);
+const words = (s) => s.toLowerCase().replace(/[^a-z0-9& ]/g, " ").split(/\s+/).filter(Boolean);
+function sameBusiness(ours, theirs) {
+  const t = new Set(words(theirs)), all = words(ours);
+  const key = all.filter((w) => !STOP.has(w));
+  const need = key.length ? key : all;
+  return need.filter((w) => t.has(w)).length >= Math.ceil(need.length / 2);
+}
+
+async function placesLookup(l, key) {
+  const r = await fetchTimeout("https://places.googleapis.com/v1/places:searchText", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Goog-Api-Key": key, "X-Goog-FieldMask": "places.displayName,places.nationalPhoneNumber,places.websiteUri,places.businessStatus" },
+    body: JSON.stringify({ textQuery: `${l.name}, ${l.addr || l.city}`, pageSize: 3 }),
+  }, 15000);
+  const j = await r.json();
+  if (j.error) throw new Error(j.error.message);
+  return (j.places || []).find((p) => sameBusiness(l.name, p.displayName?.text || "")) || null;
+}
+
+let looking = false;
+async function lookupAll() {
+  const key = store.get("places", "");
+  if (!key) return say("Add a Google Places key in Message templates to look up phone numbers and websites.");
+  if (looking) return;
+  looking = true;
+  const todo = Object.values(leads).filter((l) => !l.looked);
+  let done = 0, phones = 0, sites = 0, closed = 0, failed = "";
+  const worker = async () => {
+    while (todo.length && !failed) {
+      const l = todo.shift();
+      try {
+        const p = await placesLookup(l, key);
+        if (p?.businessStatus === "CLOSED_PERMANENTLY") { l.closed = true; l.status = "skip"; closed++; }
+        if (p?.nationalPhoneNumber && !l.phone) { l.phone = p.nationalPhoneNumber; phones++; }
+        if (p?.websiteUri && l.kind !== "refine") { Object.assign(l, { kind: "refine", site: p.websiteUri, issues: quickIssues(p.websiteUri), checked: false }); sites++; }
+        l.looked = true;
+      } catch (e) { failed = e.message || "request failed"; }
+      done++;
+      say(`Looking up contacts… ${done} done, ${todo.length} left`);
+      if (done % 5 === 0) { store.set("leads", leads); render(); }
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
+  store.set("leads", leads);
+  looking = false;
+  if (failed) say("Google lookup stopped: " + failed.slice(0, 120));
+  else say(`Lookup done: ${phones} phone numbers added, ${sites} turned out to have a website (moved to website checks), ${closed} permanently closed.`);
+  render();
+  if (sites) checkAll();
 }
 
 // ---------- previews & messages ----------
@@ -388,6 +446,7 @@ function card(l) {
     if (l.issues?.length) l.issues.forEach((i) => tag(i.short, true));
     else tag(l.checked ? (l.psi ? "Site looks OK" : "Loads OK · add Google key to grade") : "Checking…");
   } else tag("No website", true);
+  if (l.closed) tag("Closed on Google");
   if (phone) tag("📞 " + phone);
   if (l.email) tag("✉ " + l.email);
   if (l.ig) tag("Instagram");
@@ -428,6 +487,9 @@ function card(l) {
 const T = { sms: "t-sms", subj: "t-subj", email: "t-email", smsR: "t-sms-r", emailR: "t-email-r", follow: "t-follow" };
 $("psi-key").value = store.get("psi", "");
 $("psi-key").onchange = () => { store.set("psi", $("psi-key").value.trim()); toast($("psi-key").value.trim() ? "Google key saved" : "Google key removed"); };
+$("places-key").value = store.get("places", "");
+$("places-key").onchange = () => { store.set("places", $("places-key").value.trim()); toast($("places-key").value.trim() ? "Places key saved" : "Places key removed"); };
+$("lookup").onclick = lookupAll;
 for (const [k, id] of Object.entries(T)) { $(id).value = tpl[k]; $(id).oninput = () => { tpl[k] = $(id).value; store.set("tpl", tpl); }; }
 $("t-reset").onclick = () => { tpl = Object.assign({}, DEFAULTS); store.set("tpl", {}); for (const [k, id] of Object.entries(T)) $(id).value = tpl[k]; render(); };
 
